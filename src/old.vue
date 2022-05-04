@@ -1,60 +1,133 @@
 <template>
-    <div class>
-        <div v-for="post in a[0]" v-bind:key="post.id" class="list-group-item list-group-item-action shadow files" style="width:50%" >
-            {{post}}
+    <div class=curdir>{{directory}}</div>
+    <div style="padding: 5vw 10vh;">
+        <div v-if="directory != `Drives`" class="list-group-item list-group-item-action shadow dirents" v-on:click="(event) => changeDir(event)">
+           <div class="dirent">
+               <i class="bi bi-arrow-90deg-up"></i> <span id="folder_name">..</span>
+           </div>
         </div>
-        <div v-for="post in a[1]" v-bind:key="post.id" class="list-group-item list-group-item-action shadow files" style="width:50%" >
-            {{post}}
+        <div v-for="folder in directoryContents[0]" v-bind:key="folder.id" v-on:click="(event) => changeDir(event)" class="list-group-item list-group-item-action shadow dirents" >
+            <div class="dirent">
+                <i class="bi bi-folder"></i> <span id="folder_name">{{folder}}</span>
+            </div>
         </div>
-        
+        <div v-for="file in directoryContents[1]" v-bind:key="file.id" class="list-group-item list-group-item-action shadow dirents" style="display: flex; justify-content: space-between">
+            <div>
+                <i class="bi" :class="file.icon"></i> {{file.name}}
+            </div>
+            <span>{{file.size}}</span>
+        </div>
     </div>
 </template>
 
 <script>
 const fs = require("fs");
-const { resolve } = require("path");
+const { join } = require("path");
+const mime = require("mime-types");
 
-const fn = (path) => {
-    const contents = fs.readdirSync(path);
-
-    const files = [];
-    const folders = [];
-
-    contents.forEach(el => {
-        var localpath = resolve(path, el);
-        var lstat = fs.lstatSync(localpath,);
-        if(lstat.isFile()) files.push(el);
-        if(lstat.isDirectory()) folders.push(el);
-    });
-
-    return [folders,files];
-}
-export default {
+const formatSize = (size) => {
+    var i = Math.floor(Math.log(size) / Math.log(1024));
+    return (size / Math.pow(1024, i)).toFixed(2) * 1 + " " + ["B", "kB", "MB", "GB", "TB"][i];
+};
+const getFilesandDirs = (path) => {
+    console.log(`getFilesandDirs was ran with path ${path}`)
+    const dirs = fs
+        .readdirSync(path, { withFileTypes: true })
+        .filter((item) => item.isDirectory())
+        .map((item) => item.name);
     
-      data(){
-            var a=fn('D:/Games')
-        return{
-            a
+    const getIcon = (filename) => {
+        const mimetype = mime.lookup(filename);
+        
+        const icon_classes = {
+            "default": "bi-file-earmark",
+            "image": "bi-file-earmark-image",
+            "audio": "bi-file-earmark-music",
+            "video": "bi-file-earmark-play",
+            "text": "bi-file-earmark-text",
+            "application/pdf": "bi-file-earmark-pdf"
         }
-  },
-  name: 'App',
-  components: {
-  }
 
-}
+        if(!mimetype) return icon_classes.default;
+        
+        return icon_classes[mimetype.split("/")[0]] || icon_classes[mimetype] || icon_classes.default
+    }
+
+    const files = fs
+        .readdirSync(path, { withFileTypes: true })
+        .filter((item) => item.isFile())
+        .map((item) => {
+            const icon = getIcon(item.name);
+            let size, sizeFormatted;
+            try {
+                size = fs.statSync(join(path, item.name)).size;
+                if(size != 0) sizeFormatted = formatSize(size);
+                else sizeFormatted = "0 B";
+            } catch(err) {
+                sizeFormatted = "?";
+            }
+
+            return { name: item.name, icon: icon, size: sizeFormatted };
+        });
+    return [dirs, files];
+};
+
+
+export default {
+    data() {
+        let directory = "Drives";
+        let directoryContents = [["C:\\", "D:\\"], []];
+        return {
+            directory, directoryContents
+        };
+    },
+    methods: {
+        changeDir(message, event) {
+            if (event) event.preventDefault();
+
+            console.log(message.target.id);
+
+            let targetDirectoryName;
+
+                if(message.target.classList.contains("dirents"))
+                    targetDirectoryName = message.target.children[0].children[1].innerText;
+                else if(message.target.classList.contains("dirent"))
+                    targetDirectoryName = message.target.children[1].innerText;
+                else if(message.target.id == "folder_name")
+                    targetDirectoryName = message.target.innerText;
+
+            if((this.directory == "C:\\"||this.directory == "D:\\") && targetDirectoryName == "..") {
+                this.directory = "Drives";
+                this.directoryContents = [["C:\\", "D:\\"], []];
+                return;
+            } else {
+                const targetDirectoryPath = require("path").resolve(this.directory, targetDirectoryName);
+
+                this.directoryContents = getFilesandDirs(targetDirectoryPath);
+                this.directory = targetDirectoryPath;
+            }
+        }
+    },
+    name: "App",
+    components: {}
+};
 </script>
 
 <style>
-.file_field_btn
+.curdir
 {
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 3em;
+}
+.file_field_btn {
     width: 100%;
     background-color: rgba(255, 255, 255, 0);
     border-block-color: rgba(255, 255, 255, 0);
     border-color: rgba(255, 255, 255, 0);
 }
-.files
-{
-    text-align: left;
+.dirents {
+    text-align: left !important;
     user-select: none;
     font-family: Arial, Helvetica, sans-serif;
 }
@@ -80,4 +153,5 @@ export default {
     width: 6px;
     -webkit-box-shadow: inset 0 0 100px rgb(0, 0, 0); 
 }
+
 </style>
